@@ -63,8 +63,7 @@ fn falloff<T: Float>(x: T) -> T {
     (_1 - smoothstep(x) * _2) * (_1 - x * _2)
 }
 
-/// 2-dimensional wavelet noise
-pub fn wavelet2<T: Float>(seed: &Seed, point: &math::Point2<T>) -> T {
+fn value2<T: Float>(seed: &Seed, point: &math::Point2<T>) -> T {
     #[inline(always)]
     fn get<T: Float>(seed: &Seed, corner: math::Point2<isize>) -> T {
         math::cast::<_, T>(seed.get2(corner)) * math::cast(1.0 / 255.0)
@@ -74,7 +73,7 @@ pub fn wavelet2<T: Float>(seed: &Seed, point: &math::Point2<T>) -> T {
     let near_corner = math::map2(floored, math::cast);
     let far_corner = math::add2(near_corner, math::one2());
     let near_distance = math::sub2(*point, floored);
-    let far_distance = math::sub2(math::one2(), near_distance);
+    let weight = math::map2(math::sub2(*point, floored), smoothstep);
 
     // Corners
     let f00: T = get(seed, [near_corner[0], near_corner[1]]);
@@ -82,38 +81,19 @@ pub fn wavelet2<T: Float>(seed: &Seed, point: &math::Point2<T>) -> T {
     let f01: T = get(seed, [near_corner[0], far_corner[1]]);
     let f11: T = get(seed, [far_corner[0], far_corner[1]]);
 
-    // // Downsampled corners
-    // let e00: T = get(seed, [near_corner[0] / 2, near_corner[1] / 2]);
-    // let e10: T = get(seed, [far_corner[0] / 2, near_corner[1] / 2]);
-    //
-    // // |       |       |
-    // // |   |   |
-    // let distance: isize = 2;
-    // let mut w10: T = math::cast(0.0);
-    //
-    // if near_corner[0].abs() % 2 == 0 {
-    //     w10 = near_distance[0] * math::cast(0.5);
-    // } else {
-    //     w10 = near_distance[0] * math::cast(0.5) + math::cast(0.5);
-    // }
-    // let d10: T = lerp(e00, e10, smoothstep(w10));
+    let d0 = lerp(f00, f10, weight[0]);
+    let d1 = lerp(f01, f11, weight[0]);
+    let d = lerp(d0, d1, weight[1]);
 
-    // *shrug* magic.
-    let c10n: T = f00 * falloff(near_distance[0]) + f10 * falloff(far_distance[0]);
-    let c01n: T = f00 * falloff(near_distance[1]) + f01 * falloff(far_distance[1]);
+    d * math::cast(2) - math::cast(1)
+}
 
-    let c10f: T = f01 * falloff(near_distance[0]) + f11 * falloff(far_distance[0]);
-    let c01f: T = f10 * falloff(near_distance[1]) + f11 * falloff(far_distance[1]);
-
-    let c0 = c10n * c01n;
-    let c1 = c10f * c01f;
-    let c2 = c10n * c01f;
-    let c3 = c01n * c10f;
-
-    let d: T = (c0 + c1 + c2 + c3) * math::cast::<_, T>(0.25);
-    // let d: T = (c100 * c101 + c010 * c011) * math::cast::<_, T>(0.5);
-
-    d * math::cast(2.0) - math::cast(1.0)
+/// 2-dimensional wavelet noise
+pub fn wavelet2<T: Float>(seed: &Seed, point: &math::Point2<T>) -> T {
+    let downsampled = math::map2(*point, |v| v * math::cast(0.5));
+    let v0 = value2(&seed, &point);
+    let v1 = value2(&seed, &downsampled);
+    (v0 - v1) * math::cast(0.5)
 }
 
 /* code graveyard
@@ -131,5 +111,38 @@ let d10: T = (one - smoothstep(near_distance[0])) * e00 + (one - smoothstep(far_
 
 // Subtract
 let d: T = (one - smoothstep(near_distance[0])) * f00 + (one - smoothstep(far_distance[0])) * f10;
+
+// // Downsampled corners
+// let e00: T = get(seed, [near_corner[0] / 2, near_corner[1] / 2]);
+// let e10: T = get(seed, [far_corner[0] / 2, near_corner[1] / 2]);
+//
+// // |       |       |
+// // |   |   |
+// let distance: isize = 2;
+// let mut w10: T = math::cast(0.0);
+//
+// if near_corner[0].abs() % 2 == 0 {
+//     w10 = near_distance[0] * math::cast(0.5);
+// } else {
+//     w10 = near_distance[0] * math::cast(0.5) + math::cast(0.5);
+// }
+// let d10: T = lerp(e00, e10, smoothstep(w10));
+
+// *shrug* magic.
+let c10n: T = f00 * falloff(near_distance[0]) + f10 * falloff(far_distance[0]);
+let c01n: T = f00 * falloff(near_distance[1]) + f01 * falloff(far_distance[1]);
+
+let c10f: T = f01 * falloff(near_distance[0]) + f11 * falloff(far_distance[0]);
+let c01f: T = f10 * falloff(near_distance[1]) + f11 * falloff(far_distance[1]);
+
+let c0 = c10n * c01n;
+let c1 = c10f * c01f;
+let c2 = c10n * c01f;
+let c3 = c01n * c10f;
+
+let d: T = (c0 + c1 + c2 + c3) * math::cast::<_, T>(0.25);
+// let d: T = (c100 * c101 + c010 * c011) * math::cast::<_, T>(0.5);
+
+d * math::cast(2.0) - math::cast(1.0)
 
 */
