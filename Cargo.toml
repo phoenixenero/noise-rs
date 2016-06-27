@@ -18,6 +18,9 @@ name = "perlin"
 name = "open_simplex"
 
 [[example]]
+name = "wavelet"
+
+[[example]]
 name = "brownian"
 
 [[example]]
